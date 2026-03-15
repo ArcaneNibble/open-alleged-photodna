@@ -50,7 +50,7 @@ Notably, using the other functions it is possible to specify other pixel formats
 
 There are 5 pixel formats, but it is not clear what the intended use case is. They have the following number of bytes per pixel: `3, 4, 1, 3, 1`. Speculation: RGB, RGBA, Grayscale, unknown, unknown. These pixel formats also affect the final hash scaling factor (line 382 in the code), with the following values: `3, 3, 1, 1, 3`.
 
-If the image has a border or unexpected stride, some of that data is hashed with a SHA-1 hash, and _something unknown_ is done with it. This has not been reverse engineered.
+If the image has a border or unexpected stride, some of that data is hashed with a SHA-1 hash, and _something unknown_ is done with it. This has not been reverse engineered. Wild speculation: this might be used by some calling tools in order to defend against the border attack described in the paper.
 
 Initial processing is done in the function at `+0xe9c0`
 

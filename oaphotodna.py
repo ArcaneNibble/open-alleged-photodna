@@ -252,7 +252,7 @@ def compute_feature_grid(summed_im, im_w, im_h):
                 print(f"--> {feat_val}")
             feature_grid[feat_y * FEATURE_GRID_DIM + feat_x] = feat_val
 
-    return feature_grid
+    return (feature_grid, grid_step_h, grid_step_v)
 
 
 # ----- (3.3) Gradient processing -----
@@ -360,6 +360,59 @@ def compute_gradient_grid(feature_grid):
 
     return grad_out
 
+
+# ----- (3.4) Hash normalization -----
+
+# This is the hardcoded iteration limit during the iterative step
+HASH_ITER_LIMIT = 10
+
+# This is the kappa clipping constant used in Equation 16 and 17
+HASH_CLIP_CONST = 0.25
+
+
+def process_hash(gradient_grid, grid_step_h, grid_step_v):
+    # Initial image-size-dependent scaling factor
+    # NOTE: The 3 depends on the pixel format. This is 3 for RGB images.
+    scale_factor = grid_step_h * HASH_SCALE_CONST * grid_step_v * 3
+    for i in range(len(gradient_grid)):
+        # Each element is scaled down
+        gradient_grid[i] /= scale_factor
+
+    # Repeat Equation 15 and 16 until finished
+    iter_count = 0
+    while iter_count < 10:
+        did_clip = False
+
+        # Compute Equation 15.
+        # The norm has a very tiny epsilon in order to prevent division by zero.
+        # "L2 norm" means "the length of a vector" (in the standard school geometry sense).
+        l2_norm = 1e-8
+        for i in range(len(gradient_grid)):
+            l2_norm += gradient_grid[i] * gradient_grid[i]
+        l2_norm = sqrt(l2_norm)
+
+        if DEBUG_LOGGING:
+            print(f"iter {iter_count}, norm {l2_norm}")
+
+        # Compute Equation 16. Check if anything is too big.
+        # If it is, clamp it and note down that we did so.
+        for i in range(len(gradient_grid)):
+            val_i = gradient_grid[i] / l2_norm
+            gradient_grid[i] = val_i
+
+            if val_i >= HASH_CLIP_CONST and iter_count < 10:
+                gradient_grid[i] = HASH_CLIP_CONST
+                did_clip = True
+
+        # This finishes if nothing got clipped
+        if not did_clip:
+            break
+        iter_count += 1
+    if DEBUG_LOGGING:
+        print("iter done!")
+
+    return gradient_grid
+
 # ----- Put it all together -----
 
 
@@ -371,8 +424,10 @@ def compute_hash(filename):
         summed_pixels = preprocess_pixel_sum(im)
     else:
         summed_pixels = preprocess_pixel_sum_np(im)
-    feature_grid = compute_feature_grid(summed_pixels, im.width, im.height)
+    (feature_grid, grid_step_h, grid_step_v) = \
+        compute_feature_grid(summed_pixels, im.width, im.height)
     gradient_grid = compute_gradient_grid(feature_grid)
+    hash_as_floats = process_hash(gradient_grid, grid_step_h, grid_step_v)
 
 
 if __name__ == '__main__':

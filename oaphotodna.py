@@ -8,6 +8,7 @@ from PIL import Image
 DEBUG_LOGGING = True
 
 if DEBUG_LOGGING:
+    import binascii
     import struct
 try:
     import numpy as np
@@ -253,6 +254,112 @@ def compute_feature_grid(summed_im, im_w, im_h):
 
     return feature_grid
 
+
+# ----- (3.3) Gradient processing -----
+
+def compute_gradient_grid(feature_grid):
+    grad_out = [0.0] * (GRID_SIZE_HYPERPARAMETER * GRID_SIZE_HYPERPARAMETER * 4)
+    # The computation of the gradient grid iterates over the feature grid in 4x4 blocks
+    # (i.e. 6x6 blocks of 4x4 values in order to arrive at a total region of 24x24 values).
+    # This is the size of the "interior" region where there isn't missing data on the boundaries.
+    # NOTE: This *also* affects rounding behavior
+    for feat_y_chunk in range(GRID_SIZE_HYPERPARAMETER):
+        for feat_x_chunk in range(GRID_SIZE_HYPERPARAMETER):
+            for feat_chunk_sub_y in range(4):
+                for feat_chunk_sub_x in range(4):
+                    # Rearrange this chunked iteration order to get the actual coordinates we need.
+                    # NOTE: In the paper, these are `uv` coordinates.
+                    feat_x = 1 + feat_x_chunk * 4 + feat_chunk_sub_x
+                    feat_y = 1 + feat_y_chunk * 4 + feat_chunk_sub_y
+                    if DEBUG_LOGGING:
+                        print(f"feat {feat_x} {feat_y}")
+
+                    # Compute the gradients. This is Equation 12.
+                    # NOTE: You can ignore the phrase "Sobel-like operator".
+                    # This here is the exact operator needed.
+                    feat_L = feature_grid[feat_y * 26 + feat_x - 1]
+                    feat_R = feature_grid[feat_y * 26 + feat_x + 1]
+                    feat_U = feature_grid[(feat_y-1) * 26 + feat_x]
+                    feat_D = feature_grid[(feat_y+1) * 26 + feat_x]
+                    if DEBUG_LOGGING:
+                        print(f"vals {feat_L} {feat_R} {feat_U} {feat_D}")
+
+                    grad_d_horiz = feat_L - feat_R
+                    grad_d_vert = feat_U - feat_D
+
+                    # Split the gradient into components. This is Equation 13.
+                    if grad_d_horiz <= 0:
+                        grad_d_h_pos = 0
+                        grad_d_h_neg = -grad_d_horiz
+                    else:
+                        grad_d_h_pos = grad_d_horiz
+                        grad_d_h_neg = 0
+                    if grad_d_vert <= 0:
+                        grad_d_v_pos = 0
+                        grad_d_v_neg = -grad_d_vert
+                    else:
+                        grad_d_v_pos = grad_d_vert
+                        grad_d_v_neg = 0
+
+                    if DEBUG_LOGGING:
+                        print(f"grad values {binascii.hexlify(struct.pack(">d", grad_d_horiz))} " +
+                              f"{binascii.hexlify(struct.pack(">d", grad_d_vert))}")
+
+                    # Map the feature grid coordinates into gradient grid coordinates.
+                    # This is Equation 14. The value of chi is 2.5 and psi is 0.25.
+                    grad_y_f = (feat_y - 2.5) * 0.25
+                    grad_x_f = (feat_x - 2.5) * 0.25
+                    grad_y = floor(grad_y_f)
+                    grad_x = floor(grad_x_f)
+                    grad_y_residue = grad_y_f - grad_y
+                    grad_x_residue = grad_x_f - grad_x
+                    if DEBUG_LOGGING:
+                        print(f"grad pos {grad_x} {grad_y} | {grad_x_residue} {grad_y_residue}")
+
+                    # Distribute the gradients into the grid. The paper does not specify how to do this.
+                    # This is performed by performing a bilinear interpolation, but "inverted".
+                    # Each set of 4 gradient values is spread into a 2x2 cluster in the gradient grid.
+                    if grad_y >= 0:
+                        if grad_x >= 0:
+                            grad_out[(grad_y * 6 + grad_x) * 4 + 0] += \
+                                (1 - grad_x_residue) * (1 - grad_y_residue) * grad_d_h_pos
+                            grad_out[(grad_y * 6 + grad_x) * 4 + 1] += \
+                                (1 - grad_x_residue) * (1 - grad_y_residue) * grad_d_h_neg
+                            grad_out[(grad_y * 6 + grad_x) * 4 + 2] += \
+                                (1 - grad_x_residue) * (1 - grad_y_residue) * grad_d_v_pos
+                            grad_out[(grad_y * 6 + grad_x) * 4 + 3] += \
+                                (1 - grad_x_residue) * (1 - grad_y_residue) * grad_d_v_neg
+                        if grad_x < 5:
+                            grad_out[(grad_y * 6 + grad_x+1) * 4 + 0] += \
+                                grad_x_residue * (1 - grad_y_residue) * grad_d_h_pos
+                            grad_out[(grad_y * 6 + grad_x+1) * 4 + 1] += \
+                                grad_x_residue * (1 - grad_y_residue) * grad_d_h_neg
+                            grad_out[(grad_y * 6 + grad_x+1) * 4 + 2] += \
+                                grad_x_residue * (1 - grad_y_residue) * grad_d_v_pos
+                            grad_out[(grad_y * 6 + grad_x+1) * 4 + 3] += \
+                                grad_x_residue * (1 - grad_y_residue) * grad_d_v_neg
+                    if grad_y < 5:
+                        if grad_x >= 0:
+                            grad_out[((grad_y+1) * 6 + grad_x) * 4 + 0] += \
+                                (1 - grad_x_residue) * grad_y_residue * grad_d_h_pos
+                            grad_out[((grad_y+1) * 6 + grad_x) * 4 + 1] += \
+                                (1 - grad_x_residue) * grad_y_residue * grad_d_h_neg
+                            grad_out[((grad_y+1) * 6 + grad_x) * 4 + 2] += \
+                                (1 - grad_x_residue) * grad_y_residue * grad_d_v_pos
+                            grad_out[((grad_y+1) * 6 + grad_x) * 4 + 3] += \
+                                (1 - grad_x_residue) * grad_y_residue * grad_d_v_neg
+                        if grad_x < 5:
+                            grad_out[((grad_y+1) * 6 + grad_x+1) * 4 + 0] += \
+                                grad_x_residue * grad_y_residue * grad_d_h_pos
+                            grad_out[((grad_y+1) * 6 + grad_x+1) * 4 + 1] += \
+                                grad_x_residue * grad_y_residue * grad_d_h_neg
+                            grad_out[((grad_y+1) * 6 + grad_x+1) * 4 + 2] += \
+                                grad_x_residue * grad_y_residue * grad_d_v_pos
+                            grad_out[((grad_y+1) * 6 + grad_x+1) * 4 + 3] += \
+                                grad_x_residue * grad_y_residue * grad_d_v_neg
+
+    return grad_out
+
 # ----- Put it all together -----
 
 
@@ -265,6 +372,7 @@ def compute_hash(filename):
     else:
         summed_pixels = preprocess_pixel_sum_np(im)
     feature_grid = compute_feature_grid(summed_pixels, im.width, im.height)
+    gradient_grid = compute_gradient_grid(feature_grid)
 
 
 if __name__ == '__main__':

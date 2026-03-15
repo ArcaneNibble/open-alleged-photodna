@@ -453,6 +453,39 @@ def compute_hash(filename):
     return hash_as_bytes
 
 
+def compare_hashes(hash1, hash2, metric='euclidean'):
+    if len(hash1) != len(hash2):
+        raise ValueError('Hashes must have the same length')
+
+    if metric == 'euclidean':
+        return sqrt(sum((a - b) ** 2 for a, b in zip(hash1, hash2)))
+    if metric == 'manhattan':
+        return sum(abs(a - b) for a, b in zip(hash1, hash2))
+
+    raise ValueError(f'Unsupported metric: {metric}')
+
+
+def similarity_score(hash1, hash2):
+    distance = compare_hashes(hash1, hash2, metric='euclidean')
+    max_distance = sqrt(len(hash1) * (255 ** 2))
+    return 1.0 - (distance / max_distance)
+
+
+def compare_images(file1, file2, metric='euclidean'):
+    hash1 = compute_hash(file1)
+    hash2 = compute_hash(file2)
+    distance = compare_hashes(hash1, hash2, metric=metric)
+    return {
+        'file1': file1,
+        'file2': file2,
+        'metric': metric,
+        'distance': distance,
+        'similarity': similarity_score(hash1, hash2),
+        'hash1': hash1,
+        'hash2': hash2,
+    }
+
+
 def imgnet_test_inner(i):
     import base64
     filename = f"ILSVRC2012_val_{i + 1:08}.JPEG"
@@ -492,13 +525,30 @@ def imgnet_test():
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} filename")
-        sys.exit(-1)
-    photo_hash = compute_hash(sys.argv[1])
 
-    hashString = ','.join([str(i) for i in photo_hash])
-    print(hashString)
+    if len(sys.argv) == 2:
+        photo_hash = compute_hash(sys.argv[1])
+        hash_string = ','.join(str(i) for i in photo_hash)
+        print(hash_string)
+    elif len(sys.argv) == 3:
+        result = compare_images(sys.argv[1], sys.argv[2])
+        print(f"Distance ({result['metric']}): {result['distance']:.4f}")
+        print(f"Similarity: {result['similarity']:.6f}")
+    elif len(sys.argv) == 4 and sys.argv[1] == '--metric':
+        print(f"Usage: {sys.argv[0]} [--metric euclidean|manhattan] image1 image2")
+        sys.exit(-1)
+    elif len(sys.argv) == 5 and sys.argv[1] == '--metric':
+        metric = sys.argv[2]
+        result = compare_images(sys.argv[3], sys.argv[4], metric=metric)
+        print(f"Distance ({result['metric']}): {result['distance']:.4f}")
+        print(f"Similarity: {result['similarity']:.6f}")
+    else:
+        print('Usage:')
+        print(f"  {sys.argv[0]} image.jpg")
+        print(f"  {sys.argv[0]} image1.jpg image2.jpg")
+        print(f"  {sys.argv[0]} --metric euclidean image1.jpg image2.jpg")
+        print(f"  {sys.argv[0]} --metric manhattan image1.jpg image2.jpg")
+        sys.exit(-1)
 
 
 # if __name__ == '__main__':

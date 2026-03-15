@@ -305,8 +305,7 @@ def compute_gradient_grid(feature_grid):
                         grad_d_v_neg = 0
 
                     if DEBUG_LOGGING:
-                        print(f"grad values {binascii.hexlify(struct.pack(">d", grad_d_horiz))} " +
-                              f"{binascii.hexlify(struct.pack(">d", grad_d_vert))}")
+                       print( f"grad values {binascii.hexlify(struct.pack('>d', grad_d_horiz))} " f"{binascii.hexlify(struct.pack('>d', grad_d_vert))}")
 
                     # Map the feature grid coordinates into gradient grid coordinates.
                     # This is Equation 14. The value of chi is 2.5 and psi is 0.25.

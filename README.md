@@ -18,7 +18,7 @@ The remainder of this README will contain various reverse-engineer's notes, impl
 
 ## Setup
 
-This code requires Pillow (to parse images). NumPy is optional but strongly recommended (to drastically speed up input postprocessing).
+This code requires Pillow (to parse images). NumPy is optional but strongly recommended (to drastically speed up input preprocessing).
 
 By default, the tool processes a single image passed as a command-line argument:
 
@@ -60,7 +60,7 @@ The actual implementation in the leaked binary does not perform any image resizi
 
 ## Feature extraction
 
-The main processing is performed in the function at `+0xe610`.
+The main processing is performed in the function at `+0x8610`.
 
 The "feature grid" described in [[1]](#references) is the 26×26 pixels described in [[2]](#references). The "2-pixel overlap" is implemented by adding 2 when computing the grid step size.
 
@@ -68,7 +68,7 @@ The feature grid _and_ gradient grid are both stored on the stack. In order to t
 
 At `+0x9902`, the feature grid is done being computed.
 
-It is tricky to fully trace and annotate the computation, especially since the compiler seems to be very prone to overlapping operations (possibly for CPU pipeline optimization?). This code was primarily implemented based on the paper, and the binary was used only to check order of operations test for bit-exact matching.
+It is tricky to fully trace and annotate the computation, especially since the compiler seems to be very prone to overlapping operations (possibly for CPU pipeline optimization?). This code was primarily implemented based on the paper, and the binary was used only to check order of operations in order to get bit-exact matching.
 
 In the left side of Fig. 2, the dots represent feature grid coordinates. Image pixels are not shown.
 

@@ -136,8 +136,9 @@ def box_sum_for_radius(
         radius, weight):
 
     # Compute where the corners are. This is Equation 6.
-    corner_a_x = grid_point_x - radius * grid_step_h - 1
-    corner_a_y = grid_point_y - radius * grid_step_v - 1
+    # NOTE: Parens required for rounding.
+    corner_a_x = grid_point_x + (- radius * grid_step_h - 1)
+    corner_a_y = grid_point_y + (- radius * grid_step_v - 1)
     corner_d_x = grid_point_x + radius * grid_step_h
     corner_d_y = grid_point_y + radius * grid_step_v
     # Make sure the corners are within the image bounds
@@ -317,6 +318,9 @@ def compute_gradient_grid(feature_grid):
                     grad_x_residue = grad_x_f - grad_x
                     if DEBUG_LOGGING:
                         print(f"grad pos {grad_x} {grad_y} | {grad_x_residue} {grad_y_residue}")
+
+                    # NOTE: Values involved in computing gradient grid coordinates are all binary fractions
+                    # (i.e. 1 / 2^n), so all computations here are exact with no rounding concerns.
 
                     # Distribute the gradients into the grid. The paper does not specify how to do this.
                     # This is performed by performing a bilinear interpolation, but "inverted".

@@ -26,6 +26,12 @@ By default, the tool processes a single image passed as a command-line argument:
 ./oaphotodna.py image.jpg
 ```
 
+Alternatively, two images can be passed in order to compare their hashes:
+
+```sh
+./oaphotodna.py image1.jpg image2.jpg
+```
+
 This code has also been validated against the leaked binary on the ImageNet 2012 validation set. There is commented-out code that checks this.
 
 ## Input preprocessing

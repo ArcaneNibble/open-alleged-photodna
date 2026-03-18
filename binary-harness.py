@@ -108,6 +108,9 @@ def load_dll():
     virt_align = pe.OPTIONAL_HEADER.SectionAlignment
     text_to_rdata_sz = rdata_section.VirtualAddress - text_section.VirtualAddress
     tot_sz = text_to_rdata_sz + divroundup(rdata_section.Misc_VirtualSize, virt_align)
+    # This extra dummy page allows __security_cookie to not crash
+    # (it's technically the beginning of `.data`, but *none* of that data is actually needed/used)
+    tot_sz += virt_align
 
     exports = {}
     for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
@@ -377,10 +380,6 @@ def load_dll():
     reserved_addr_buf[0xf010] = 0xc3
     # Patch out __security_check_cookie
     reserved_addr_buf[0xf080] = 0xc3
-    # Patch out read of __security_cookie (with mov eax, imm32)
-    reserved_addr_buf[0x762c] = 0x90
-    reserved_addr_buf[0x762d] = 0x90
-    reserved_addr_buf[0x762e] = 0xb8
 
     # Set perms correctly
     mprotect_ty = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int, use_errno=True)
